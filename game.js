@@ -5,13 +5,18 @@ import Main from './js/main'
 
 new Main()*/
 
+const DIRECTION_UP = 0
+const DIRECTION_LEFT = 1
+const DIRECTION_BOTTOM = 2
+const DIRECTION_RIGHT = 3
+
 function Snake(in_maxNodes){
     this.maxNodes = in_maxNodes
     this.nodes = new Array(this.maxNodes)
     this.length = 0
     this.direction = DIRECTION_UP
     for (var i = 0; i < this.maxNodes; i++) {
-        this.nodes[i] = new Point()
+        this.nodes[i] = new Point(0, 0)
     }
 
     this.Add = function(in_x, in_y){
@@ -38,17 +43,86 @@ function Snake(in_maxNodes){
         this.nodes[length-1].y = 0
         length --
     }
+
+    this.Move = function(){
+        for (var i = this.length - 1; i >= 1; i--) {
+            this.nodes[i].x = this.nodes[i - 1].x
+            this.nodes[i].y = this.nodes[i - 1].y
+        }
+       switch(this.direction){
+            case DIRECTION_UP:
+                this.nodes[0].y--
+                break
+            case DIRECTION_BOTTOM:
+                this.nodes[0].y++
+                break
+            case DIRECTION_LEFT:
+                this.nodes[0].x--
+                break
+            case DIRECTION_RIGHT:
+                this.nodes[0].x++
+                break
+        }
+        if (this.nodes[0].x < 0 || this.nodes[0].x >= mNumBlockH ||
+            this.nodes[0].y < 0 || this.nodes[0].y >= mNumBlockW){
+                return -1
+        }
+        return 0
+    }
+
+    this.Eat = function(in_foodx, in_foody){
+        if (this.length >= this.maxNodes) {
+            return -1
+        }
+        var foodx, foody
+        switch(this.direction){
+            case DIRECTION_UP:
+                foodx = this.nodes[0].x
+                foody = this.nodes[0].y - 1
+                break
+            case DIRECTION_BOTTOM:
+                foodx = this.nodes[0].x
+                foody = this.nodes[0].y + 1
+                break
+            case DIRECTION_LEFT:
+                foodx = this.nodes[0].x - 1
+                foody = this.nodes[0].y
+                break
+            case DIRECTION_RIGHT:
+                foodx = this.nodes[0].x + 1
+                foody = this.nodes[0].y
+                break
+        }
+        if (foodx == in_foodx && foody == in_foody){
+                for (var i = this.length - 1; i >= 0; i--) {
+                    this.nodes[i + 1].x = this.nodes[i].x
+                    this.nodes[i + 1].y = this.nodes[i].y
+                }
+                this.nodes[0].x = foodx
+                this.nodes[0].y = foody
+                this.length++
+                return 0
+        }
+    }
+
+    this.Turn = function(dir){
+        if (this.length > 1){
+            if ((dir == DIRECTION_UP && this.nodes[1].y == this.nodes[0].y-1 && this.nodes[1].x == this.nodes[0].x) ||
+                (dir == DIRECTION_BOTTOM && this.nodes[1].y == this.nodes[0].y+1 && this.nodes[1].x == this.nodes[0].x) ||
+                (dir == DIRECTION_LEFT && this.nodes[1].x == this.nodes[0].x-1 && this.nodes[1].y == this.nodes[0].y) ||
+                (dir == DIRECTION_RIGHT && this.nodes[1].x == this.nodes[0].x+1 && this.nodes[1].y == this.nodes[0].y)){
+                    return -1
+            }
+        }
+        this.direction = dir
+    }
+    return -1
 }
 
-function Point(){
-    this.x = 0
-    this.y = 0
+function Point(x, y){
+    this.x = x
+    this.y = y
 }
-
-const DIRECTION_UP = 0
-const DIRECTION_LEFT = 1
-const DIRECTION_BOTTOM = 2
-const DIRECTION_RIGHT = 3
 
 var canvas = wx.createCanvas()
 var context = canvas.getContext("2d")
@@ -63,6 +137,8 @@ var mNumBlockH = 40
 var mBlockWidth = 0
 var mBlockColor = 'black'
 var mBackgroundColor = 'white'
+var mSnake
+var mFood = null
 
 function initGrids(){
     var block_w = mPanelWidth / mNumBlockW
@@ -96,162 +172,159 @@ function drawSnake(snake){
     }
 }
 
-function main(){
+function update(){
     //draw background color
     context.fillStyle = mBackgroundColor
     context.fillRect(0, 0, canvas.width, canvas.height)
 
-    var snake = new Snake(100)
-
-    snake.Add(5, 6)
-    snake.Add(5, 7)
-    initGrids()
     drawGrids()
-    drawSnake(snake)
+    drawSnake(mSnake)
+
+    //draw food
+    if (mFood != null){
+        drawBlock(mFood.x, mFood.y)
+    }
+}
+
+function isPointInSnake(in_x, in_y){
+    for (var i = 0; i < mSnake.length; i++){
+        if (mSnake.nodes[i].x == in_x && mSnake.nodes[i].y == in_y){
+            return true
+        }
+    }
+    return false
+}
+
+function produceFood(){
+    var food = new Point(0, 0)
+    var total = mNumBlockH * mNumBlockW
+    var count = 0
+    var pos = parseInt(Math.random() * (total - mSnake.length))
+    for (var i = 0; i < mNumBlockH; i++){
+        for (var j = 0; j < mNumBlockW; j++){
+            if (!isPointInSnake(j, i)){
+                count++
+                if (count == pos) {
+                    food.x = j
+                    food.y = i
+                    return food
+                }
+            }
+        }
+    }
+    return null
+}
+
+var gameInterval = 0
+function startGame(){
+    gameInterval = setInterval(function(){
+        if (mSnake.Move() == 0){
+            if (mSnake.Eat(mFood.x, mFood.y) == 0){
+                mFood = produceFood()
+            }
+            update()
+        } else {
+            gameOver()
+        }
+    }, 1000)
+}
+
+function gameOver(){
+    clearInterval(gameInterval)
+    var x = 0, y = 0
+    var gameOverInterval = setInterval(function(){
+        drawBlock(x, y)
+        x++
+        if (x >= mNumBlockW){
+            x = 0
+            y++
+        }
+        if (y >= mNumBlockH){
+            clearInterval(gameOverInterval)
+        }
+    },5)
+}
+
+function main(){
+    initGrids()
+    mSnake = new Snake(100)
+
+    mSnake.Add(5, 6)
+    mSnake.Add(5, 7)
+    mFood = produceFood()
+    update()
+
+    startGame()
 }
 
 main()
 
-wx.onTouchMove(function(res){
-
-})
-/*var objects = new Array(20)
-var objectCount = 0
-var background_color = '#243044'
-var currentSelectObject = -1
-var touchStartX
-var touchStartY*/
-
-/*var drawObjects = function () {
-    canvasContext.fillStyle = background_color
-    canvasContext.fillRect(0, 0, canvas.width, canvas.height)
-    for (var i = 0; i < objectCount; i++) {
-        objects[i].draw()
-    }
-}
-setInterval(arg => {
-    drawObjects()
-}, 20)
-
-var touchDetect = function (in_x, in_y) {
-    for (var i = 0; i < objectCount; i++) {
-        if (objects[i].touchDetect(in_x, in_y) == 1) {
-            return i
+function isUpGesture(points, length){
+    for (var i = 1; i < length; i++){
+        if (points[i].y > points[i-1].y || Math.abs(points[i].y - points[i-1].y) < Math.abs(points[i].x - points[i-1].x) ){
+            return false
         }
+    }
+    return true
+}
+
+function isDownGesture(points, length){
+    for (var i = 1; i < length; i++){
+        if(points[i].y < points[i-1].y || Math.abs(points[i].y - points[i-1].y) < Math.abs(points[i].x - points[i-1].x)){
+            return false
+        }
+    }
+    return true
+}
+
+function isLeftGesture(points, length) {
+    for (var i = 1; i < length; i++){
+        if (points[i].x > points[i - 1].x || Math.abs(points[i].y - points[i - 1].y) > Math.abs(points[i].x - points[i - 1].x)){
+            return false
+        }
+    }
+    return true
+}
+
+function isRightGesture(points, length) {
+    for (var i = 1; i < length; i++){
+        if (points[i].x < points[i - 1].x || Math.abs(points[i].y - points[i - 1].y) > Math.abs(points[i].x - points[i - 1].x)) {
+            return false
+        }
+    }
+    return true
+}
+
+function gestureDetector(points, length) {
+    if (isUpGesture(points, length)){
+        return DIRECTION_UP
+    } else if (isDownGesture(points, length)){
+        return DIRECTION_BOTTOM
+    } else if(isLeftGesture(points, length)){
+        return DIRECTION_LEFT
+    }else if(isRightGesture(points, length)){
+        return DIRECTION_RIGHT
     }
     return -1
 }
 
-var BaseObject = function (in_x, in_y) {
-    this.x = in_x
-    this.y = in_y
-}
-var RectObject = function (in_x, in_y) {
-    BaseObject.call(this, in_x, in_y)
-    this.objType = 'rect'
-    this.width = 100
-    this.height = 100
-    this.fillStyle = 'red'
-    this.draw = function () {
-        canvasContext.fillStyle = this.fillStyle
-        canvasContext.fillRect(this.x, this.y, this.width, this.height)
-    }
-    this.touchDetect = function (in_x, in_y) {
-        if (in_x >= this.x && in_x < this.x + this.width && in_y >= this.y && in_y < this.y + this.height) {
-            return 1
-        }
-        else {
-            return 0
-        }
-    }
-}
-RectObject.prototype = BaseObject
+var mGesturePoints = null
+var mGesturePtLength
 
-var CircleObject = function (in_x, in_y, in_r) {
-    BaseObject.call(this, in_x, in_y)
-    this.r = in_r
-    this.fillStyle = 'green'
-    this.draw = function () {
-        canvasContext.fillStyle = this.fillStyle
-        canvasContext.arc(this.x, this.y, this.r, 0, Math.PI * 2)
-        canvasContext.fill()
-    }
-    this.touchDetect = function (in_x, in_y) {
-        if (Math.pow(in_x - this.x, 2) + Math.pow(in_y - this.y, 2) <= Math.pow(r, 2)) {
-            return 1
-        }
-        else {
-            return 0
-        }
-    }
-}
-CircleObject.prototype = BaseObject
-
-var PanelObject = function (in_x, in_y, in_r) {
-    CircleObject.call(this, in_x, in_y, in_r)
-    this.detectMovement = function (in_x, in_y) {
-        if (this.touchDetect(in_x, in_y) == 1) {
-            if (in_x == this.x) {
-                if (in_y > this.y) {
-                    return 0
-                }
-                else if (in_y < this.y) {
-                    return 2
-                }
-                else {
-                    return -1
-                }
-            }
-            else {
-                tan = (in_y - this.y) / (in_x - this.x)
-                if (in_y > this.y && (tan >= 1 || tan <= -1)) {
-                    return 0
-                }
-                else if (in_x < this.x && (tan < 1 && tan > -1)) {
-                    return 1
-                }
-                else if (in_y < this.y && (tan >= 1 || tan <= -1)) {
-                    return 3
-                }
-                else if (in_x > this.x && (tan > -1 && tan < 1)) {
-                    return 4
-                }
-            }
-        }
-        return -1
-    }
-}
-var rectObject = new RectObject(20, 20)
-objects[objectCount] = rectObject
-objectCount++
-
-var circleObject = new CircleObject(35, canvas.height - 35, 30)
-objects[objectCount] = circleObject
-objectCount++
-
-setInterval(arg => {
-    objects[0].x += 10
-    objects[0].y += 10
-}, 500)
-
-wx.onTouchStart(function (res) {
-    touchStartX = res.changedTouches[0].clientX
-    touchStartY = res.changedTouches[0].clientY
-    currentSelectObject = touchDetect(touchStartX, touchStartY)
-    console.log(res.touchs)
+wx.onTouchStart(function(res){
+    mGesturePoints = Array()
+    var point = new Point(res.changedTouches[0].clientX, res.changedTouches[0].clientY)
+    mGesturePtLength = mGesturePoints.push(point)
 })
 
-wx.onTouchMove(function (res) {
-    if (currentSelectObject >= 0) {
-        objects[currentSelectObject].x = res.changedTouches[0].clientX
-        objects[currentSelectObject].y = res.changedTouches[0].clientY
-    }
-    console.log(res)
+wx.onTouchMove(function(res){
+    mGesturePtLength = mGesturePoints.push(new Point(res.changedTouches[0].clientX, res.changedTouches[0].clientY))
 })
 
-wx.onTouchEnd(function (res) {
-    console.log(res)
-    touchStartX = -1
-    touchStartY = -1
-    currentSelectObject = -1
-})*/
+wx.onTouchEnd(function(res){
+    mGesturePtLength = mGesturePoints.push(new Point(res.changedTouches[0].clientX, res.changedTouches[0].clientY))
+    var direction = gestureDetector(mGesturePoints, mGesturePtLength)
+    if (direction != -1){
+        mSnake.Turn(direction)
+    }
+})
