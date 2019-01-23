@@ -7,10 +7,10 @@
 		"minified": true,
 		"newFeature": true
 	},
-	"compileType": "game",
+	"compileType": "miniprogram",
 	"libVersion": "2.5.0",
-	"appid": "touristappid",
-	"projectname": "wegame",
+	"appid": "wx6aa584518944e515",
+	"projectname": "Snake",
 	"isGameTourist": true,
 	"condition": {
 		"search": {
